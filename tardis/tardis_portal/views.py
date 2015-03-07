@@ -617,6 +617,8 @@ def view_experiment(request, experiment_id,
         authz.has_experiment_download_access(request, experiment_id)
     if request.user.is_authenticated():
         c['is_owner'] = authz.has_experiment_ownership(request, experiment_id)
+        c['has_read_or_owner_ACL'] = authz.has_read_or_owner_ACL(request,
+                                                                 experiment_id)
     c['subtitle'] = experiment.title
     c['nav'] = [{'name': 'Data', 'link': '/experiment/view/'},
                 {'name': experiment.title,
@@ -2244,7 +2246,7 @@ def remove_user_from_group(request, group_id, username):
 
 
 @never_cache  # too complex # noqa
-@transaction.commit_on_success
+@transaction.atomic
 @authz.experiment_ownership_required
 def add_experiment_access_user(request, experiment_id, username):
 
@@ -2437,7 +2439,7 @@ def change_group_permissions(request, experiment_id, group_id):
         request, 'tardis_portal/form_template.html', c))
 
 
-@transaction.commit_on_success  # too complex # noqa
+@transaction.atomic  # too complex # noqa
 @never_cache
 def create_group(request):
 
@@ -2521,42 +2523,24 @@ def create_group(request):
 
 
 @never_cache  # too complex # noqa
-@transaction.commit_manually
+@transaction.atomic
 @authz.experiment_ownership_required
 def add_experiment_access_group(request, experiment_id, groupname):
 
-    canRead = False
-    canWrite = False
-    canDelete = False
-    isOwner = False
-
-    if 'canRead' in request.GET:
-        if request.GET['canRead'] == 'true':
-            canRead = True
-
-    if 'canWrite' in request.GET:
-        if request.GET['canWrite'] == 'true':
-            canWrite = True
-
-    if 'canDelete' in request.GET:
-        if request.GET['canDelete'] == 'true':
-            canDelete = True
-
-    if 'isOwner' in request.GET:
-        if request.GET['isOwner'] == 'true':
-            isOwner = True
+    canRead = request.GET.get('canRead') == 'true'
+    canWrite = request.GET.get('canWrite') == 'true'
+    canDelete = request.GET.get('canDelete') == 'true'
+    isOwner = request.GET.get('isOwner') == 'true'
 
     try:
         experiment = Experiment.objects.get(pk=experiment_id)
     except Experiment.DoesNotExist:
-        transaction.rollback()
         return HttpResponse('Experiment (id=%d) does not exist' %
                             (experiment_id))
 
     try:
         group = Group.objects.get(name=groupname)
     except Group.DoesNotExist:
-        transaction.rollback()
         return HttpResponse('Group %s does not exist' % (groupname))
 
     acl = ObjectACL.objects.filter(
@@ -2568,7 +2552,6 @@ def add_experiment_access_group(request, experiment_id, groupname):
 
     if acl.count() > 0:
         # An ACL already exists for this experiment/group.
-        transaction.rollback()
         return HttpResponse('Could not create group %s '
                             '(It is likely that it already exists)' %
                             (groupname))
@@ -2586,11 +2569,9 @@ def add_experiment_access_group(request, experiment_id, groupname):
     c = Context({'group': group,
                 'group_acl': acl,
                  'experiment_id': experiment_id})
-    response = HttpResponse(render_response_index(
+    return HttpResponse(render_response_index(
         request,
         'tardis_portal/ajax/add_group_result.html', c))
-    transaction.commit()
-    return response
 
 
 @never_cache
@@ -2651,7 +2632,7 @@ def stats(request):
                         'tardis_portal/stats.html', c))
 
 
-@transaction.commit_on_success  # too complex # noqa
+@transaction.atomic  # too complex # noqa
 @never_cache
 def create_user(request):
 
