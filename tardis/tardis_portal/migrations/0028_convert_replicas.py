@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import datetime
 import os
+import platform
+import ctypes
 
 from south.db import db
 from south.v2 import DataMigration
@@ -23,14 +25,23 @@ class Migration(DataMigration):
             if location.type in ('local', 'online') and \
                location.transfer_provider in ('local', ):
                 base_dir = location.url.replace('file://', '')
-                try:
-                    base_dir_stat = os.statvfs(base_dir)
-                except OSError:
-                    # for running this on a test db
-                    print 'Cannot access location %s. OK for testing only' % (
-                        location.name,)
-                    base_dir_stat = os.statvfs('/')
-                disk_size = base_dir_stat.f_frsize * base_dir_stat.f_blocks
+                sys_type = platform.system()
+                if sys_type == 'Windows':
+                    free_bytes = ctypes.c_ulonglong(0)
+                    ctypes.windll.kernel32\
+                        .GetDiskFreeSpaceExW(ctypes.c_wchar_p(base_dir),
+                                             None, None,
+                                             ctypes.pointer(free_bytes))
+                    disk_size = free_bytes.value
+                else:
+                    try:
+                        base_dir_stat = os.statvfs(base_dir)
+                    except OSError:
+                        # for running this on a test db
+                        print 'Cannot access location %s. ' \
+                            'OK for testing only' % (location.name,)
+                        base_dir_stat = os.statvfs('/')
+                    disk_size = base_dir_stat.f_frsize * base_dir_stat.f_blocks
                 newsb.max_size = disk_size
                 newsb.save()
                 sb_opt = orm.StorageBoxOption(storage_box=newsb,
@@ -49,8 +60,9 @@ class Migration(DataMigration):
         counter = 0
         percent = 0
         print 'total replicas: %d ' % int(total)
-        import resource
-        print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # resource isn't supported on Windows
+        # import resource
+        # print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         for replica in orm.Replica.objects.all().iterator():
             new_dfo = orm.DataFileObject()
             new_dfo.datafile = replica.datafile
@@ -63,7 +75,7 @@ class Migration(DataMigration):
             if int(counter/total * 100) > percent:
                 percent += 1
                 print '{0} % done '.format(percent),
-                print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                # print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
         if False:
             files_failed_verification = []

@@ -1,5 +1,7 @@
 import os
 from os import path
+import ctypes
+import platform
 
 from django.conf import settings
 from django.db import models
@@ -99,12 +101,21 @@ class StorageBox(models.Model):
 
     @classmethod
     def create_local_box(cls, location=None):
-        try:
-            base_dir_stat = os.statvfs(location)
-        except OSError:
-            logger.error('cannot access storage location: %s' % (location,))
-            raise
-        disk_size = base_dir_stat.f_frsize * base_dir_stat.f_blocks
+        sys_type = platform.system()
+        if sys_type == 'Windows':
+            free_bytes = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32\
+                .GetDiskFreeSpaceExW(ctypes.c_wchar_p(location),
+                                     None, None,
+                                     ctypes.pointer(free_bytes))
+            disk_size = free_bytes.value
+        else:
+            try:
+                base_dir_stat = os.statvfs(location)
+            except OSError:
+                logger.error('cannot access storage location: %s' % (location,))
+                raise
+            disk_size = base_dir_stat.f_frsize * base_dir_stat.f_blocks
         max_size = disk_size * 0.9
         s_box = StorageBox(max_size=max_size,
                            status='online')
