@@ -129,9 +129,9 @@ class UploaderStagingHost(models.Model):
 
     host = models.CharField(default="", max_length=64)
 
-    uses_hosts_allow = models.BooleanField()
-    uses_iptables_firewall = models.BooleanField()
-    uses_external_firewall = models.BooleanField()
+    uses_hosts_allow = models.BooleanField(null=False, default=False)
+    uses_iptables_firewall = models.BooleanField(null=False, default=False)
+    uses_external_firewall = models.BooleanField(null=False, default=False)
 
     class Meta:
         app_label = 'tardis_portal'
@@ -161,7 +161,7 @@ class UploaderRegistrationRequest(models.Model):
     requester_key_fingerprint = models.CharField(max_length=64)
     request_time = models.DateTimeField(null=True, blank=True)
 
-    approved = models.BooleanField()
+    approved = models.BooleanField(null=False, default=False)
     approved_staging_host = models.ForeignKey(UploaderStagingHost,
                                               null=True, blank=True,
                                               default=None)

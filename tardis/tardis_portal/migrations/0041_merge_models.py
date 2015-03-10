@@ -1,95 +1,33 @@
-# -*- coding: utf-8 -*-
-import datetime
-import os
-import platform
-import ctypes
+"""
+From http://south.readthedocs.org/en/latest/tutorial/part5.html
 
+If you re-run migrate with --merge, South will simply apply the migrations that
+were missing out-of-order. This usually works, as teams are working on separate
+models; if it doesn't, you'll need to look at the actual migration
+changes and resolve them manually, as it's likely they'll conflict.
+
+The second thing to note is that, when you pull in someone else's model changes
+complete with their own migration, you'll need to make a new empty migration
+that has the changes from both branches of development frozen in (if you've
+used mercurial, this is equivalent to a merge commit). To do so, simply run:
+
+python mytardis.py migrate tardis_portal --merge
+python mytardis.py schemamigration --empty tardis_portal merge_models
+"""
+# -*- coding: utf-8 -*-
+from south.utils import datetime_utils as datetime
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-class Migration(DataMigration):
+
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        "Write your forwards methods here."
-        # Note: Don't use "from appname.models import ModelName".
-        # Use orm.ModelName to refer to models in this application,
-        # and orm['appname.ModelName'] for models in other applications.
-
-        # Locations
-        for location in orm.Location.objects.all():
-            newsb = orm.StorageBox()
-            newsb.name = location.name
-            newsb.description = "converted from Location"
-            newsb.status = "dirty"
-            if location.type in ('local', 'online') and \
-               location.transfer_provider in ('local', ):
-                base_dir = location.url.replace('file://', '')
-                sys_type = platform.system()
-                if sys_type == 'Windows':
-                    free_bytes = ctypes.c_ulonglong(0)
-                    ctypes.windll.kernel32\
-                        .GetDiskFreeSpaceExW(ctypes.c_wchar_p(base_dir),
-                                             None, None,
-                                             ctypes.pointer(free_bytes))
-                    disk_size = free_bytes.value
-                else:
-                    try:
-                        base_dir_stat = os.statvfs(base_dir)
-                    except OSError:
-                        # for running this on a test db
-                        print 'Cannot access location %s. ' \
-                            'OK for testing only' % (location.name,)
-                        base_dir_stat = os.statvfs('/')
-                    disk_size = base_dir_stat.f_frsize * base_dir_stat.f_blocks
-                newsb.max_size = disk_size
-                newsb.save()
-                sb_opt = orm.StorageBoxOption(storage_box=newsb,
-                                              key="location",
-                                              value=base_dir)
-                sb_opt.save()
-            else:
-                # placeholder storage class. Manual intervention required
-                newsb.django_storage_class = \
-                    'tardis.tardis_portal.storage.DummyStorage'
-                newsb.max_size = 0
-                newsb.save()
-
-        # Replicas
-        total = float(orm.Replica.objects.all().count())
-        counter = 0
-        percent = 0
-        print 'total replicas: %d ' % int(total)
-        # resource isn't supported on Windows
-        # import resource
-        # print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        for replica in orm.Replica.objects.all().iterator():
-            new_dfo = orm.DataFileObject()
-            new_dfo.datafile = replica.datafile
-            new_dfo.uri = replica.url
-            new_dfo.storage_box = orm.StorageBox.objects.get(
-                name=replica.location.name)
-            new_dfo.save()
-            new_dfo.datafile.dataset.storage_boxes.add(new_dfo.storage_box)
-            counter += 1
-            if int(counter/total * 100) > percent:
-                percent += 1
-                print '{0} % done '.format(percent),
-                # print 'memory used: %d' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-
-        if False:
-            files_failed_verification = []
-            # verify all files
-            for dfo in orm.DataFileObject.objects.all():
-                if not dfo.storage_box.django_storage_class == \
-                   'tardis.tardis_portal.storage.DummyStorage':
-                    if not dfo.verify():
-                        files_failed_verification.append(dfo)
-            print files_failed_verification or "All files migrated fine"
+        pass
 
     def backwards(self, orm):
-        "Write your backwards methods here."
-        raise RuntimeError("Cannot reverse this migration.")
+        pass
 
     models = {
         u'auth.group': {
@@ -110,7 +48,7 @@ class Migration(DataMigration):
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'email': ('django.db.models.fields.EmailField', [], {'max_length': '75', 'blank': 'True'}),
             'first_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
-            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['auth.Group']", 'symmetrical': 'False', 'blank': 'True'}),
+            'groups': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Group']"}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'is_active': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'is_staff': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
@@ -118,7 +56,7 @@ class Migration(DataMigration):
             'last_login': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'last_name': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
             'password': ('django.db.models.fields.CharField', [], {'max_length': '128'}),
-            'user_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'to': u"orm['auth.Permission']", 'symmetrical': 'False', 'blank': 'True'}),
+            'user_permissions': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "u'user_set'", 'blank': 'True', 'to': u"orm['auth.Permission']"}),
             'username': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '30'})
         },
         u'contenttypes.contenttype': {
@@ -128,22 +66,14 @@ class Migration(DataMigration):
             'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
-        'tardis_portal.author_experiment': {
-            'Meta': {'ordering': "['order']", 'unique_together': "(('experiment', 'author'),)", 'object_name': 'Author_Experiment'},
-            'author': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
-            'experiment': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Experiment']"}),
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'order': ('django.db.models.fields.PositiveIntegerField', [], {}),
-            'url': ('django.db.models.fields.URLField', [], {'max_length': '2000', 'blank': 'True'})
-        },
         'tardis_portal.datafile': {
-            'Meta': {'ordering': "['filename']", 'unique_together': "(['directory', 'filename', 'version'],)", 'object_name': 'DataFile'},
+            'Meta': {'ordering': "['filename']", 'unique_together': "(['dataset', 'directory', 'filename', 'version'],)", 'object_name': 'DataFile'},
             'created_time': ('django.db.models.fields.DateTimeField', [], {'null': 'True', 'blank': 'True'}),
             'dataset': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Dataset']"}),
             'deleted': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'deleted_time': ('django.db.models.fields.DateTimeField', [], {'null': 'True', 'blank': 'True'}),
-            'directory': ('tardis.tardis_portal.models.fields.DirectoryField', [], {'null': 'True', 'blank': 'True'}),
-            'filename': ('django.db.models.fields.CharField', [], {'max_length': '400'}),
+            'directory': ('tardis.tardis_portal.models.fields.DirectoryField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
+            'filename': ('django.db.models.fields.CharField', [], {'max_length': '400', 'db_index': 'True'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'md5sum': ('django.db.models.fields.CharField', [], {'max_length': '32', 'blank': 'True'}),
             'mimetype': ('django.db.models.fields.CharField', [], {'max_length': '80', 'blank': 'True'}),
@@ -166,6 +96,8 @@ class Migration(DataMigration):
             'Meta': {'ordering': "['name']", 'object_name': 'DatafileParameter'},
             'datetime_value': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'link_ct': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['contenttypes.ContentType']", 'null': 'True', 'blank': 'True'}),
+            'link_id': ('django.db.models.fields.PositiveIntegerField', [], {'null': 'True', 'blank': 'True'}),
             'name': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.ParameterName']"}),
             'numerical_value': ('django.db.models.fields.FloatField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             'parameterset': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.DatafileParameterSet']"}),
@@ -185,12 +117,14 @@ class Migration(DataMigration):
             'experiments': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'datasets'", 'symmetrical': 'False', 'to': "orm['tardis_portal.Experiment']"}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'immutable': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
-            'storage_boxes': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'related_name': "'datasets'", 'blank': 'True', 'to': "orm['tardis_portal.StorageBox']"})
+            'instrument': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Instrument']", 'null': 'True', 'blank': 'True'})
         },
         'tardis_portal.datasetparameter': {
             'Meta': {'ordering': "['name']", 'object_name': 'DatasetParameter'},
             'datetime_value': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'link_ct': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['contenttypes.ContentType']", 'null': 'True', 'blank': 'True'}),
+            'link_id': ('django.db.models.fields.PositiveIntegerField', [], {'null': 'True', 'blank': 'True'}),
             'name': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.ParameterName']"}),
             'numerical_value': ('django.db.models.fields.FloatField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             'parameterset': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.DatasetParameterSet']"}),
@@ -221,10 +155,22 @@ class Migration(DataMigration):
             'update_time': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
             'url': ('django.db.models.fields.URLField', [], {'max_length': '255', 'null': 'True', 'blank': 'True'})
         },
+        'tardis_portal.experimentauthor': {
+            'Meta': {'ordering': "['order']", 'unique_together': "(('experiment', 'author'),)", 'object_name': 'ExperimentAuthor'},
+            'author': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'email': ('django.db.models.fields.CharField', [], {'max_length': '255', 'null': 'True', 'blank': 'True'}),
+            'experiment': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Experiment']"}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'institution': ('django.db.models.fields.CharField', [], {'max_length': '255', 'null': 'True', 'blank': 'True'}),
+            'order': ('django.db.models.fields.PositiveIntegerField', [], {}),
+            'url': ('django.db.models.fields.URLField', [], {'max_length': '2000', 'null': 'True', 'blank': 'True'})
+        },
         'tardis_portal.experimentparameter': {
             'Meta': {'ordering': "['name']", 'object_name': 'ExperimentParameter'},
             'datetime_value': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'link_ct': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['contenttypes.ContentType']", 'null': 'True', 'blank': 'True'}),
+            'link_id': ('django.db.models.fields.PositiveIntegerField', [], {'null': 'True', 'blank': 'True'}),
             'name': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.ParameterName']"}),
             'numerical_value': ('django.db.models.fields.FloatField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
             'parameterset': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.ExperimentParameterSet']"}),
@@ -237,6 +183,12 @@ class Migration(DataMigration):
             'schema': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Schema']"}),
             'storage_box': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'experimentparametersets'", 'symmetrical': 'False', 'to': "orm['tardis_portal.StorageBox']"})
         },
+        'tardis_portal.facility': {
+            'Meta': {'object_name': 'Facility'},
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'manager_group': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.Group']"}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
+        },
         'tardis_portal.freetextsearchfield': {
             'Meta': {'object_name': 'FreeTextSearchField'},
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
@@ -248,6 +200,36 @@ class Migration(DataMigration):
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']"})
         },
+        'tardis_portal.instrument': {
+            'Meta': {'unique_together': "(['name', 'facility'],)", 'object_name': 'Instrument'},
+            'facility': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Facility']"}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
+        },
+        'tardis_portal.instrumentparameter': {
+            'Meta': {'ordering': "['name']", 'object_name': 'InstrumentParameter'},
+            'datetime_value': ('django.db.models.fields.DateTimeField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'link_ct': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['contenttypes.ContentType']", 'null': 'True', 'blank': 'True'}),
+            'link_id': ('django.db.models.fields.PositiveIntegerField', [], {'null': 'True', 'blank': 'True'}),
+            'name': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.ParameterName']"}),
+            'numerical_value': ('django.db.models.fields.FloatField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'}),
+            'parameterset': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.InstrumentParameterSet']"}),
+            'string_value': ('django.db.models.fields.TextField', [], {'db_index': 'True', 'null': 'True', 'blank': 'True'})
+        },
+        'tardis_portal.instrumentparameterset': {
+            'Meta': {'ordering': "['id']", 'object_name': 'InstrumentParameterSet'},
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'instrument': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Instrument']"}),
+            'schema': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Schema']"}),
+            'storage_box': ('django.db.models.fields.related.ManyToManyField', [], {'related_name': "'instrumentparametersets'", 'symmetrical': 'False', 'to': "orm['tardis_portal.StorageBox']"})
+        },
+        'tardis_portal.jti': {
+            'Meta': {'object_name': 'JTI'},
+            'created_time': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'jti': ('django.db.models.fields.CharField', [], {'max_length': '255'})
+        },
         'tardis_portal.license': {
             'Meta': {'object_name': 'License'},
             'allows_distribution': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
@@ -257,16 +239,6 @@ class Migration(DataMigration):
             'is_active': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '400'}),
             'url': ('django.db.models.fields.URLField', [], {'unique': 'True', 'max_length': '2000'})
-        },
-        'tardis_portal.location': {
-            'Meta': {'object_name': 'Location'},
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'is_available': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '10'}),
-            'priority': ('django.db.models.fields.IntegerField', [], {}),
-            'transfer_provider': ('django.db.models.fields.CharField', [], {'default': "'local'", 'max_length': '10'}),
-            'type': ('django.db.models.fields.CharField', [], {'max_length': '10'}),
-            'url': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '400'})
         },
         'tardis_portal.objectacl': {
             'Meta': {'ordering': "['content_type', 'object_id']", 'object_name': 'ObjectACL'},
@@ -297,23 +269,6 @@ class Migration(DataMigration):
             'schema': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Schema']"}),
             'units': ('django.db.models.fields.CharField', [], {'max_length': '60', 'blank': 'True'})
         },
-        'tardis_portal.providerparameter': {
-            'Meta': {'unique_together': "(('location', 'name'),)", 'object_name': 'ProviderParameter'},
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'location': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Location']"}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '10'}),
-            'value': ('django.db.models.fields.CharField', [], {'max_length': '80', 'blank': 'True'})
-        },
-        'tardis_portal.replica': {
-            'Meta': {'unique_together': "(('datafile', 'location'),)", 'object_name': 'Replica'},
-            'datafile': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.DataFile']"}),
-            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'location': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Location']"}),
-            'protocol': ('django.db.models.fields.CharField', [], {'max_length': '10', 'blank': 'True'}),
-            'stay_remote': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
-            'url': ('django.db.models.fields.CharField', [], {'max_length': '400'}),
-            'verified': ('django.db.models.fields.BooleanField', [], {'default': 'False'})
-        },
         'tardis_portal.schema': {
             'Meta': {'object_name': 'Schema'},
             'hidden': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
@@ -330,8 +285,8 @@ class Migration(DataMigration):
             'django_storage_class': ('django.db.models.fields.TextField', [], {'default': "'tardis.tardis_portal.storage.MyTardisLocalFileSystemStorage'"}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'max_size': ('django.db.models.fields.BigIntegerField', [], {}),
-            'status': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            'name': ('django.db.models.fields.TextField', [], {'default': "'default'", 'unique': 'True'})
+            'name': ('django.db.models.fields.TextField', [], {'default': "'default'", 'unique': 'True'}),
+            'status': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
         'tardis_portal.storageboxattribute': {
             'Meta': {'object_name': 'StorageBoxAttribute'},
@@ -350,10 +305,67 @@ class Migration(DataMigration):
         'tardis_portal.token': {
             'Meta': {'object_name': 'Token'},
             'experiment': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Experiment']"}),
-            'expiry_date': ('django.db.models.fields.DateField', [], {'default': 'datetime.datetime(2014, 4, 23, 0, 0)'}),
+            'expiry_date': ('django.db.models.fields.DateField', [], {'default': 'datetime.datetime(2015, 4, 9, 0, 0)'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'token': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '30'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']"})
+        },
+        'tardis_portal.uploader': {
+            'Meta': {'object_name': 'Uploader'},
+            'architecture': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'contact_email': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'contact_name': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'cpus': ('django.db.models.fields.IntegerField', [], {}),
+            'created_time': ('django.db.models.fields.DateTimeField', [], {}),
+            'data_path': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'default_user': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'disk_usage': ('django.db.models.fields.TextField', [], {}),
+            'hostname': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'instruments': ('django.db.models.fields.related.ManyToManyField', [], {'symmetrical': 'False', 'to': "orm['tardis_portal.Instrument']", 'null': 'True', 'blank': 'True'}),
+            'interface': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '64'}),
+            'ipv4_address': ('django.db.models.fields.CharField', [], {'max_length': '16'}),
+            'ipv6_address': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'mac_address': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '64'}),
+            'machine': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'memory': ('django.db.models.fields.CharField', [], {'max_length': '32'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'os_platform': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'os_release': ('django.db.models.fields.CharField', [], {'max_length': '32'}),
+            'os_system': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'os_username': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'os_version': ('django.db.models.fields.CharField', [], {'max_length': '128'}),
+            'processor': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'subnet_mask': ('django.db.models.fields.CharField', [], {'max_length': '16'}),
+            'updated_time': ('django.db.models.fields.DateTimeField', [], {}),
+            'user_agent_install_location': ('django.db.models.fields.CharField', [], {'max_length': '128'}),
+            'user_agent_name': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'user_agent_version': ('django.db.models.fields.CharField', [], {'max_length': '32'}),
+            'wan_ip_address': ('django.db.models.fields.CharField', [], {'max_length': '64'})
+        },
+        'tardis_portal.uploaderregistrationrequest': {
+            'Meta': {'unique_together': "(['uploader', 'requester_key_fingerprint'],)", 'object_name': 'UploaderRegistrationRequest'},
+            'approval_expiry': ('django.db.models.fields.DateField', [], {'default': 'None', 'null': 'True', 'blank': 'True'}),
+            'approval_time': ('django.db.models.fields.DateTimeField', [], {'default': 'None', 'null': 'True', 'blank': 'True'}),
+            'approved': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
+            'approved_staging_host': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'to': "orm['tardis_portal.UploaderStagingHost']", 'null': 'True', 'blank': 'True'}),
+            'approved_username': ('django.db.models.fields.CharField', [], {'default': 'None', 'max_length': '32', 'null': 'True', 'blank': 'True'}),
+            'approver_comments': ('django.db.models.fields.TextField', [], {'default': 'None', 'null': 'True', 'blank': 'True'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'request_time': ('django.db.models.fields.DateTimeField', [], {'null': 'True', 'blank': 'True'}),
+            'requester_email': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'requester_key_fingerprint': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'requester_name': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
+            'requester_public_key': ('django.db.models.fields.TextField', [], {}),
+            'uploader': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['tardis_portal.Uploader']"})
+        },
+        'tardis_portal.uploaderstaginghost': {
+            'Meta': {'object_name': 'UploaderStagingHost'},
+            'host': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '64'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'uses_external_firewall': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
+            'uses_hosts_allow': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
+            'uses_iptables_firewall': ('django.db.models.fields.BooleanField', [], {'default': 'False'})
         },
         'tardis_portal.userauthentication': {
             'Meta': {'object_name': 'UserAuthentication'},
@@ -366,9 +378,9 @@ class Migration(DataMigration):
             'Meta': {'object_name': 'UserProfile'},
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'isDjangoAccount': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
+            'rapidConnectEduPersonTargetedID': ('django.db.models.fields.CharField', [], {'max_length': '400', 'null': 'True', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']", 'unique': 'True'})
         }
     }
 
     complete_apps = ['tardis_portal']
-    symmetrical = True
