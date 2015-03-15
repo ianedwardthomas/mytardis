@@ -1248,36 +1248,6 @@ class UploaderResource(MyTardisModelResource):
         if ip is not None:
             bundle.data['wan_ip_address'] = ip
         bundle = super(UploaderResource, self).obj_create(bundle, **kwargs)
-
-        protocol = ""
-
-        try:
-            if hasattr(settings, "IS_SECURE") and settings.IS_SECURE:
-                protocol = "s"
-
-            current_site_complete = "http%s://%s" % \
-                (protocol, Site.objects.get_current().domain)
-
-            context = Context({
-                'current_site': current_site_complete,
-                'request_id': bundle.obj.id
-            })
-
-            subject = '[MyTardis] Uploader Registration Request Created'
-
-            staff_users = User.objects.filter(is_staff=True)
-
-            for staff in staff_users:
-                if staff.email:
-                    logger.info('email task dispatched to staff %s'
-                                % staff.username)
-                    email_user_task\
-                        .delay(subject,
-                               'uploader_registration_request_created',
-                               context, staff)
-        except:
-            logger.error(traceback.format_exc())
-
         return bundle
 
     def obj_update(self, bundle, **kwargs):
@@ -1325,6 +1295,36 @@ class UploaderRegistrationRequestResource(MyTardisModelResource):
     def obj_create(self, bundle, **kwargs):
         bundle = super(UploaderRegistrationRequestResource, self)\
             .obj_create(bundle, **kwargs)
+
+        protocol = ""
+
+        try:
+            if hasattr(settings, "IS_SECURE") and settings.IS_SECURE:
+                protocol = "s"
+
+            current_site_complete = "http%s://%s" % \
+                (protocol, Site.objects.get_current().domain)
+
+            context = Context({
+                'current_site': current_site_complete,
+                'request_id': bundle.obj.id
+            })
+
+            subject = '[MyTardis] Uploader Registration Request Created'
+
+            staff_users = User.objects.filter(is_staff=True)
+
+            for staff in staff_users:
+                if staff.email:
+                    logger.info('email task dispatched to staff %s'
+                                % staff.username)
+                    email_user_task\
+                        .delay(subject,
+                               'uploader_registration_request_created',
+                               context, staff)
+        except:
+            logger.error(traceback.format_exc())
+
         return bundle
 
     def hydrate(self, bundle):
