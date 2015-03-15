@@ -4,12 +4,8 @@ import traceback
 from django.db import models
 from django.db.models.signals import post_save
 from django.conf import settings
-from django.contrib.sites.models import Site
-from django.template import Context
-from django.contrib.auth.models import User
 
 from .instrument import Instrument
-from tardis.tardis_portal.tasks import email_user_task
 
 logger = logging.getLogger(__name__)
 
@@ -183,41 +179,3 @@ class UploaderRegistrationRequest(models.Model):
             self.requester_name + " | " + \
             str(self.request_time) + " | " + \
             ("Approved" if self.approved else "Not approved")
-
-
-def saved_uploader_registration_request(sender, instance, created,
-                                            **kwargs):
-    protocol = ""
-
-    if hasattr(settings, "IS_SECURE") and settings.IS_SECURE:
-        protocol = "s"
-
-    current_site_complete = "http%s://%s" % \
-        (protocol, Site.objects.get_current().domain)
-
-    context = Context({
-        'current_site': current_site_complete,
-        'request_id': instance.id
-    })
-
-    subject = '[MyTardis] Uploader Registration Request Saved'
-
-    staff_users = User.objects.filter(is_staff=True)
-
-    for staff in staff_users:
-        if staff.email:
-            # The try/except block is useful when running in a single
-            # thread (settings.CELERY_ALWAYS_EAGER = True), in which case
-            # delay won't dispatch the email task to a Celery worker, so
-            # the email task could raise an exception in the main thread.
-            try:
-                logger.info('email task dispatched to staff %s'
-                            % staff.username)
-                email_user_task.delay(subject,
-                                      'uploader_registration_request_saved',
-                                      context, staff)
-            except:
-                logger.error(traceback.format_exc())
-
-post_save.connect(saved_uploader_registration_request,
-                  sender=UploaderRegistrationRequest)

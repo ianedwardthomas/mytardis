@@ -17,6 +17,8 @@ from django.contrib.auth.models import Group
 from django.core.serializers import json
 from django.core.servers.basehttp import FileWrapper
 from django.http import HttpResponse
+from django.contrib.sites.models import Site
+from django.template import Context
 
 from tardis.tardis_portal.auth.decorators import \
     get_accessible_datafiles_for_user
@@ -48,6 +50,7 @@ from tardis.tardis_portal.models.uploader import UploaderRegistrationRequest
 from tardis.tardis_portal.models.facility import Facility
 from tardis.tardis_portal.models.facility import facilities_managed_by
 from tardis.tardis_portal.models.instrument import Instrument
+from tardis.tardis_portal.tasks import email_user_task
 
 from tastypie import fields
 from tastypie.authentication import Authentication
@@ -65,6 +68,8 @@ from tastypie.utils import trailing_slash
 from tastypie.contrib.contenttypes.fields import GenericForeignKeyField
 
 import logging
+import traceback
+
 logger = logging.getLogger(__name__)
 
 
@@ -1243,6 +1248,36 @@ class UploaderResource(MyTardisModelResource):
         if ip is not None:
             bundle.data['wan_ip_address'] = ip
         bundle = super(UploaderResource, self).obj_create(bundle, **kwargs)
+
+        protocol = ""
+
+        try:
+            if hasattr(settings, "IS_SECURE") and settings.IS_SECURE:
+                protocol = "s"
+
+            current_site_complete = "http%s://%s" % \
+                (protocol, Site.objects.get_current().domain)
+
+            context = Context({
+                'current_site': current_site_complete,
+                'request_id': bundle.obj.id
+            })
+
+            subject = '[MyTardis] Uploader Registration Request Created'
+
+            staff_users = User.objects.filter(is_staff=True)
+
+            for staff in staff_users:
+                if staff.email:
+                    logger.info('email task dispatched to staff %s'
+                                % staff.username)
+                    email_user_task\
+                        .delay(subject,
+                               'uploader_registration_request_created',
+                               context, staff)
+        except:
+            logger.error(traceback.format_exc())
+
         return bundle
 
     def obj_update(self, bundle, **kwargs):
